@@ -240,7 +240,8 @@ def segment_image_manual(
     colors = ["#00ffff", "#ff00ff", "#00ff7f", "#ff6347", "#00bfff",
               "#ffa500", "#ff69b4", "#7fffd4", "#ffd700", "#ffdab9", "#adff2f", 
               "#d2b48c", "#dcdcdc", "#ffff00", ]
-    label_2_color = {lab: colors[i] for i, lab in enumerate(label)}
+    num_colors = len(colors)
+    label_2_color = {lab: colors[i%num_colors] for i, lab in enumerate(label)}
 
     def event_hook(ctrl: Controller, *, example: dict):
         nonlocal cache
@@ -267,8 +268,12 @@ def segment_image_manual(
         log(f"RECIPE: There are {len(example['spans'])} spans selected.")
         for i, mask in enumerate(masks):
             h, w = mask.shape[-2:]
-            np_mask = (np.array(mask).astype(int).reshape(h, w)  * 255).astype(np.uint8)
-            color = label_2_color[example['spans'][i]['label']]
+            np_mask = (np.array(mask.cpu()).astype(int).reshape(h, w)  * 255).astype(np.uint8)
+            label = example['spans'][i]['label']
+            if label in label_2_color:
+                color = label_2_color[label]
+            else:
+                color = label_2_color[0]
             alpha_mask = pil_to_alpha_mask(Image.fromarray(np_mask), color=color)
             # Paste the mask on top of original image
             pil_image.paste(alpha_mask, (0,0), mask=alpha_mask)

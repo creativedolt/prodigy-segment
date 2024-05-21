@@ -91,12 +91,24 @@ class MaskDecoder(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        for tensor in [image_embeddings, image_pe, sparse_prompt_embeddings, dense_prompt_embeddings, multimask_output]:
+            if isinstance(tensor, torch.Tensor):
+                tensor.to(device)
+
         masks, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
         )
+
+        for tensor in [image_embeddings, image_pe, sparse_prompt_embeddings, dense_prompt_embeddings, multimask_output]:
+            if isinstance(tensor, torch.Tensor):
+                tensor.to("cpu")
+
+        masks.to("cpu")
+        iou_pred.to("cpu")
 
         # Select the correct mask or masks for output
         if multimask_output:
@@ -123,13 +135,17 @@ class MaskDecoder(nn.Module):
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
-        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0).to(device="cuda" if torch.cuda.is_available() else "cpu")
+        print(f"src device: {src.device} dense embeddings device: {dense_prompt_embeddings.device}")
+        print(f'src shape: {src.shape} tokens: {tokens.shape} dense_prompt_embeddings: {dense_prompt_embeddings.shape}')
         src = src + dense_prompt_embeddings
         pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
         b, c, h, w = src.shape
 
         # Run the transformer
         hs, src = self.transformer(src, pos_src, tokens)
+        # if torch.cuda.is_available():
+        #     src = src.to("cpu")
         iou_token_out = hs[:, 0, :]
         mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
 

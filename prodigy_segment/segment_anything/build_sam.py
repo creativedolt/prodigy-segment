@@ -104,4 +104,7 @@ def _build_sam(
         with open(checkpoint, "rb") as f:
             state_dict = torch.load(f)
         sam.load_state_dict(state_dict)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        sam.to(device)
+        print(f"_build_sam: moving sam model to: {device} sam device: {sam.device}")
     return sam
